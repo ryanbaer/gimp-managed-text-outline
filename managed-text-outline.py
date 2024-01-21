@@ -221,9 +221,9 @@ def update_managed_group(image, root_layer, text_layer, existing_outline_layer=N
     return {
         "success": True,
         "data": {
-            "outline": outline_layer,
-            "group": root_layer,
-            "cloned": text_layer,
+            "root_layer": root_layer,
+            "text_layer": text_layer,
+            "outline_layer": outline_layer,
         },
     }
 
@@ -276,9 +276,9 @@ def convert_new_text_layer(image, original_text_layer):
     pdb.gimp_image_insert_layer(image, outline_layer, root_layer, 1)
 
     return {
-        "cloned": text_layer,
-        "group": root_layer,
-        "outline": outline_layer,
+        "root_layer": root_layer,
+        "text_layer": text_layer,
+        "outline_layer": outline_layer,
     }
 
 
@@ -360,20 +360,7 @@ def prepare_target_layer(image, original_layer):
 
         return update_managed_group(image, root_layer, text_layer, outline_layer)
 
-    # Add a new layer
-    result = convert_new_text_layer(image, original_layer)
-    outline = result["outline"]
-    group = result["group"]
-    cloned = result["cloned"]
-
-    return {
-        "success": True,
-        "data": {
-            "outline": outline,
-            "group": group,
-            "cloned": cloned,
-        },
-    }
+    return convert_new_text_layer(image, original_layer)
 
 
 def manage_text_outline(image, original_layer):
@@ -387,15 +374,13 @@ def manage_text_outline(image, original_layer):
     outcome = prepare_target_layer(image, original_layer)
     if not outcome["success"]:
         error = outcome["error"]
-        if error == "UnknownLayerType" or error == "FoundRootWithoutText":
-            return
-        else:
+        if error != "UnknownLayerType" and error != "FoundRootWithoutText":
             raise ValueError("Unknown error: %s" % error)
 
-    data = outcome["data"]
+        return
 
-    text_layer = data["cloned"]
-    outline_layer = data["outline"]
+    text_layer = outcome["data"]["text_layer"]
+    outline_layer = outcome["data"]["outline_layer"]
 
     gimp.progress_update(25)
 
