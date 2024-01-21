@@ -398,7 +398,7 @@ def manage_text_outline(image, original_layer):
     gimp.progress_update(100)
 
 
-def run(image, layer):
+def run_plugin(image, layer):
     try:
         return manage_text_outline(image, layer)
     except Exception as e:
@@ -423,7 +423,7 @@ register(
     "*",
     [],
     [],
-    run,
+    run_plugin,
 )
 
 # Instruct GIMP to start the plugin.
