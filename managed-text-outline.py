@@ -9,17 +9,19 @@ from gimpfu import *
 
 
 class ParasiteFields:
-    # Used to identify the root layer (group layer)
+    """Enum-like class for the specific parasite fields we use"""
+
     RootField = "managed-outline:root"
+    """Used to identify the root layer (group layer)"""
 
-    # Used to identify the text layer
     TextField = "managed-outline:text"
+    """Used to identify the text layer"""
 
-    # Used to identify the outline layer
     OutlineField = "managed-outline:outline"
+    """Used to identify the outline layer"""
 
-    # Used on the child layers to reference the layer ID of the root layer (group layer)
     RootReferenceField = "managed-outline:root-id"
+    """Used on the child layers to reference the layer ID of the root layer (group layer)"""
 
 
 class FFIUtils:
