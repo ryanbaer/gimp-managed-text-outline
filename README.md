@@ -63,7 +63,7 @@ The plugin will find the parent group layer, and re-outline the text layer.
 With this plugin, there is a common workflow with some repeated actions and keystrokes:
 - Create a new text layer with some text; or, modify an existing text layer (change the text, move the layer, etc.)
 - Press `X` to swap the foreground and background colors so that your outline color is now the foreground color
-- Press `Cmd/Ctrl + F`` to run the plugin
+- Press `Cmd/Ctrl + F` to run the plugin
 - Press `X` again to swap back to the font color
 - Create a new text layer with different text
 - Press `X` to swap back to the stroke color
