@@ -19,30 +19,63 @@ PARASITE_ROOT_ID_REF = "managed-outline:root-id"
 class CUtils:
     @staticmethod
     def c_style_boolean(value):
+        """
+        Converts a C-style boolean (0 or 1) to a Python boolean.
+        """
+
         return True if value == 1 else False
 
     @staticmethod
     def remove_data_terminator(s):
+        """
+        Removes the data terminator from a parasite's data. This is done by removing the
+        null byte from the end of the string. This is necessary because the data is stored
+        as a C-style string, which is null-terminated.
+        """
+
         return s.replace("\x00", "")
 
 
 class LayerUtils:
     @staticmethod
     def is_text_layer(layer):
+        """
+        Determines if the given layer is a text layer.
+        This is done by using GIMP's `gimp_item_is_text_layer` method from it's procedural database.
+
+        Because it is via their internal FFI, it returns a C-style boolean (0 or 1), so we convert
+        it to a Python boolean via our helper method `CUtils.c_style_boolean`.
+        """
+
         return CUtils.c_style_boolean(pdb.gimp_item_is_text_layer(layer))
 
 
 class ManagedLayerUtils:
     @staticmethod
     def is_managed_root(layer):
+        """
+        Determines if the given layer is a managed root layer. This is done by checking for the
+        presence of the `PARASITE_ROOT_KEY` parasite.
+        """
+
         return layer.parasite_find(PARASITE_ROOT_KEY) is not None
 
     @staticmethod
     def is_managed_text(layer):
+        """
+        Determines if the given layer is a managed text layer. This is done by checking for the
+        presence of the `PARASITE_TEXT` parasite.
+        """
+
         return layer.parasite_find(PARASITE_TEXT) is not None
 
     @staticmethod
     def is_managed_outline(layer):
+        """
+        Determines if the given layer is a managed outline layer. This is done by checking for the
+        presence of the `PARASITE_OUTLINE` parasite.
+        """
+
         return layer.parasite_find(PARASITE_OUTLINE) is not None
 
     @staticmethod
@@ -70,8 +103,6 @@ class ManagedLayerUtils:
 
         group_id = str(root_layer.ID)
         ref_group_id = ParasiteUtils.get_parasite_data(child_layer_parasite)
-
-        # ref_group_id = CUtils.remove_x00(child_layer_parasite.data)
 
         return {"success": True, "data": group_id == ref_group_id}
 
@@ -107,8 +138,13 @@ class ManagedLayerUtils:
         return {"success": True, "data": parent}
 
 
-def get_root_id_ref(managed_layer):
-    parasite = ParasiteUtils.get_parasite(managed_layer, PARASITE_ROOT_ID_REF)
+def get_root_id_ref(root_layer):
+    """
+    Gets the root ID reference for the given root layer. Assumes the layer is
+    already a root layer.
+    """
+
+    parasite = ParasiteUtils.get_parasite(root_layer, PARASITE_ROOT_ID_REF)
     if parasite is None:
         return {"success": False, "error": "Could not find root ID reference"}
 
@@ -118,6 +154,14 @@ def get_root_id_ref(managed_layer):
 class ParasiteUtils:
     @staticmethod
     def add_parasite(layer, key, value):
+        """
+        Adds a parasite to the given layer.  If the parasite already
+        exists, it will be replaced. If the value passed in is not
+        a string, it raises a ValueError.
+
+        The created parasite is persistent and undoable.
+        """
+
         if type(value) is not str:
             raise ValueError("Expected value to be a string")
 
@@ -127,29 +171,37 @@ class ParasiteUtils:
 
     @staticmethod
     def get_parasite(layer, key):
+        """
+        Gets the parasite with the given key from the given layer.
+        Returns None if the parasite does not exist.
+        """
+
         return layer.parasite_find(key)
 
     @staticmethod
     def get_parasite_data(parasite):
+        """
+        Gets the data from the given parasite.  If the parasite does
+        not exist, returns None.
+        """
+
         return CUtils.remove_data_terminator(parasite.data)
 
 
-def text_to_path(image, layer):
+def text_to_path(image, text_layer):
     """
     Creates a new path based on the passed-in text layer.  Will end
     up throwing a RuntimeException if our layer is not text.  Returns
     the new path.
     """
 
-    path = pdb.gimp_vectors_new_from_text_layer(image, layer)
+    path = pdb.gimp_vectors_new_from_text_layer(image, text_layer)
     pdb.gimp_image_insert_vectors(image, path, None, 0)
     return path
 
 
 def update_managed_group(image, root_layer, text_layer, existing_outline_layer=None):
     position = root_layer.children.index(text_layer)
-
-    # clone = pdb.gimp_layer_copy(text_layer, True)
 
     if existing_outline_layer:
         pdb.gimp_image_remove_layer(image, existing_outline_layer)
@@ -230,10 +282,9 @@ def convert_new_text_layer(image, original_text_layer):
     }
 
 
-def stroke_path_and_remove(image, layer, path):
+def outline_path(image, layer, path):
     """
-    Strokes along the given path, using the current active brush.
-    Then removes our temporary path from the list
+    Outline the path with the current brush, and then remove it.
     """
 
     pdb.gimp_edit_stroke_vectors(layer, path)
@@ -242,15 +293,19 @@ def stroke_path_and_remove(image, layer, path):
 
 def crop_layer(image, layer):
     """
-    Autocrops the given layer to be as small as possible.  This actually
-    just calls a different plugin which does all the heavy lifting.
+    Autocrops the given layer to be as small as possible using the existing `pdb` method.
     """
     pdb.plug_in_autocrop_layer(image, layer)
 
 
 def determine_target_layer_type(layer):
     """
-    Determines whether the layer is a text layer, a manage root layer, a managed text layer, or a managed outline layer.
+    Determines the target layer type. This could be:
+    - managed-root (the parent Layer Group)
+    - managed-text (the text layer)
+    - managed-outline (the outline layer)
+    - text (a regular text layer for us to manage)
+    - unknown-type (something else we don't care about)
     """
 
     if ManagedLayerUtils.is_managed_root(layer):
@@ -344,23 +399,18 @@ def manage_text_outline(image, original_layer):
 
     gimp.progress_update(25)
 
-    # Create a path from the current layer
+    # Convert the text layer to a path that we can stroke (outline)
     path = text_to_path(image, text_layer)
     gimp.progress_update(50)
 
-    # Stroke along our path and remove it
-    stroke_path_and_remove(image, outline_layer, path)
+    # Outline the path of the text layer and remove the path we made
+    outline_path(image, outline_layer, path)
     gimp.progress_update(75)
 
-    # Now autocrop the layer so it doesn't take up the
-    # whole image size.  Relies on another plugin which
-    # I assume must be stock, since I didn't install it
-    # manually.
+    # The outline layer is as big as the image so the stroke wouldn't get
+    # clipped. Now we need to crop it down to the size of the text layer.
     crop_layer(image, outline_layer)
     gimp.progress_update(100)
-
-    # Aaaand exit.
-    return
 
 
 def run(image, layer):
@@ -374,7 +424,9 @@ def run(image, layer):
         traceback.print_exc()
 
 
-# This is the plugin registration function
+# Register the plugin with GIMP
+# For a breakdown of the function signature, see here:
+# https://www.gimp.org/docs/python/pygimp.html#PLUGIN-FRAMEWORK
 register(
     "managed_text_outline",
     "Managed Text Outline",
@@ -389,4 +441,5 @@ register(
     run,
 )
 
+# Instruct GIMP to start the plugin.
 main()
