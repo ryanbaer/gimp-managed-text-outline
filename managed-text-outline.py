@@ -16,7 +16,7 @@ PARASITE_OUTLINE = "managed-outline:outline"
 PARASITE_ROOT_ID_REF = "managed-outline:root-id"
 
 
-class CUtils:
+class FFIUtils:
     @staticmethod
     def c_style_boolean(value):
         """
@@ -47,7 +47,7 @@ class LayerUtils:
         it to a Python boolean via our helper method `CUtils.c_style_boolean`.
         """
 
-        return CUtils.c_style_boolean(pdb.gimp_item_is_text_layer(layer))
+        return FFIUtils.c_style_boolean(pdb.gimp_item_is_text_layer(layer))
 
 
 class ManagedLayerUtils:
@@ -185,7 +185,7 @@ class ParasiteUtils:
         not exist, returns None.
         """
 
-        return CUtils.remove_data_terminator(parasite.data)
+        return FFIUtils.remove_data_terminator(parasite.data)
 
 
 def text_to_path(image, text_layer):
