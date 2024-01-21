@@ -7,13 +7,19 @@
 
 from gimpfu import *
 
-PARASITE_ROOT_KEY = "managed-outline:root"
 
-PARASITE_TEXT = "managed-outline:text"
-PARASITE_OUTLINE = "managed-outline:outline"
+class ParasiteFields:
+    # Used to identify the root layer (group layer)
+    RootField = "managed-outline:root"
 
-# Used on other nodes to reference the layer ID of the root node (group layer)
-PARASITE_ROOT_ID_REF = "managed-outline:root-id"
+    # Used to identify the text layer
+    TextField = "managed-outline:text"
+
+    # Used to identify the outline layer
+    OutlineField = "managed-outline:outline"
+
+    # Used on the child layers to reference the layer ID of the root layer (group layer)
+    RootReferenceField = "managed-outline:root-id"
 
 
 class FFIUtils:
@@ -55,28 +61,28 @@ class ManagedLayerUtils:
     def is_managed_root(layer):
         """
         Determines if the given layer is a managed root layer. This is done by checking for the
-        presence of the `PARASITE_ROOT_KEY` parasite.
+        presence of the `ParasiteFields.RootField` parasite.
         """
 
-        return layer.parasite_find(PARASITE_ROOT_KEY) is not None
+        return layer.parasite_find(ParasiteFields.RootField) is not None
 
     @staticmethod
     def is_managed_text(layer):
         """
         Determines if the given layer is a managed text layer. This is done by checking for the
-        presence of the `PARASITE_TEXT` parasite.
+        presence of the `ParasiteFields.TextField` parasite.
         """
 
-        return layer.parasite_find(PARASITE_TEXT) is not None
+        return layer.parasite_find(ParasiteFields.TextField) is not None
 
     @staticmethod
     def is_managed_outline(layer):
         """
         Determines if the given layer is a managed outline layer. This is done by checking for the
-        presence of the `PARASITE_OUTLINE` parasite.
+        presence of the `ParasiteFields.OutlineField` parasite.
         """
 
-        return layer.parasite_find(PARASITE_OUTLINE) is not None
+        return layer.parasite_find(ParasiteFields.OutlineField) is not None
 
     @staticmethod
     def does_group_match(root_layer, child_layer):
@@ -93,7 +99,7 @@ class ManagedLayerUtils:
             }
 
         child_layer_parasite = ParasiteUtils.get_parasite(
-            child_layer, PARASITE_ROOT_ID_REF
+            child_layer, ParasiteFields.RootReferenceField
         )
         if child_layer_parasite is None:
             return {
@@ -116,7 +122,7 @@ class ManagedLayerUtils:
         if ManagedLayerUtils.is_managed_root(managed_layer):
             return {"success": True, "data": managed_layer}
 
-        outcome = ManagedLayerUtils.get_root_id_ref(managed_layer)
+        outcome = ManagedLayerUtils.get_parent_root_id(managed_layer)
         if not outcome["success"]:
             return outcome
 
@@ -138,13 +144,14 @@ class ManagedLayerUtils:
         return {"success": True, "data": parent}
 
     @staticmethod
-    def get_root_id_ref(root_layer):
+    def get_parent_root_id(child_layer):
         """
-        Gets the root ID reference for the given root layer. Assumes the layer is
-        already a root layer.
+        Gets the root ID reference for the given child layer.
         """
 
-        parasite = ParasiteUtils.get_parasite(root_layer, PARASITE_ROOT_ID_REF)
+        parasite = ParasiteUtils.get_parasite(
+            child_layer, ParasiteFields.RootReferenceField
+        )
         if parasite is None:
             return {"success": False, "error": "Could not find root ID reference"}
 
@@ -211,10 +218,16 @@ def update_managed_group(image, root_layer, text_layer, existing_outline_layer=N
     outline_layer = gimp.Layer(
         image, outline_title, image.width, image.height, RGBA_IMAGE, 100, NORMAL_MODE
     )
-    ParasiteUtils.add_parasite(outline_layer, PARASITE_OUTLINE, "True")
-    ParasiteUtils.add_parasite(outline_layer, PARASITE_ROOT_ID_REF, str(root_layer.ID))
+    ParasiteUtils.add_parasite(outline_layer, ParasiteFields.OutlineField, "True")
+    ParasiteUtils.add_parasite(
+        outline_layer, ParasiteFields.RootReferenceField, str(root_layer.ID)
+    )
 
-    ParasiteUtils.add_parasite(text_layer, PARASITE_ROOT_ID_REF, str(root_layer.ID))
+    # This handles the duplicated root group issue. We essentially reparent the text layer
+    # to the valid managed root layer it is now underneath.
+    ParasiteUtils.add_parasite(
+        text_layer, ParasiteFields.RootReferenceField, str(root_layer.ID)
+    )
 
     pdb.gimp_image_insert_layer(image, outline_layer, root_layer, 1)
 
@@ -253,7 +266,7 @@ def convert_new_text_layer(image, original_text_layer):
 
     root_layer = pdb.gimp_layer_group_new(image)
     root_layer.name = "Outlined " + original_text_layer.name
-    ParasiteUtils.add_parasite(root_layer, PARASITE_ROOT_KEY, "True")
+    ParasiteUtils.add_parasite(root_layer, ParasiteFields.RootField, "True")
 
     if is_nested:
         pdb.gimp_image_insert_layer(
@@ -269,16 +282,20 @@ def convert_new_text_layer(image, original_text_layer):
     pdb.gimp_image_remove_layer(image, original_text_layer)
     text_layer.name = layer_name
 
-    ParasiteUtils.add_parasite(text_layer, PARASITE_TEXT, "True")
-    ParasiteUtils.add_parasite(text_layer, PARASITE_ROOT_ID_REF, str(root_layer.ID))
+    ParasiteUtils.add_parasite(text_layer, ParasiteFields.TextField, "True")
+    ParasiteUtils.add_parasite(
+        text_layer, ParasiteFields.RootReferenceField, str(root_layer.ID)
+    )
 
     # Add a new layer below the selected one
     outline_title = "%s Text Outline" % (layer_name)
     outline_layer = gimp.Layer(
         image, outline_title, image.width, image.height, RGBA_IMAGE, 100, NORMAL_MODE
     )
-    ParasiteUtils.add_parasite(outline_layer, PARASITE_OUTLINE, "True")
-    ParasiteUtils.add_parasite(outline_layer, PARASITE_ROOT_ID_REF, str(root_layer.ID))
+    ParasiteUtils.add_parasite(outline_layer, ParasiteFields.OutlineField, "True")
+    ParasiteUtils.add_parasite(
+        outline_layer, ParasiteFields.RootReferenceField, str(root_layer.ID)
+    )
 
     pdb.gimp_image_insert_layer(image, outline_layer, root_layer, 1)
 
