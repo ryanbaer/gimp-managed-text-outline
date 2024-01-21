@@ -220,6 +220,8 @@ def update_managed_group(image, root_layer, text_layer, existing_outline_layer=N
     outline_layer = gimp.Layer(
         image, outline_title, image.width, image.height, RGBA_IMAGE, 100, NORMAL_MODE
     )
+
+    # Mark the new outline layer as managed and add a reference to the root layer
     ParasiteUtils.add_parasite(outline_layer, ParasiteFields.OutlineField, "True")
     ParasiteUtils.add_parasite(
         outline_layer, ParasiteFields.RootReferenceField, str(root_layer.ID)
@@ -302,9 +304,12 @@ def convert_new_text_layer(image, original_text_layer):
     pdb.gimp_image_insert_layer(image, outline_layer, root_layer, 1)
 
     return {
-        "root_layer": root_layer,
-        "text_layer": text_layer,
-        "outline_layer": outline_layer,
+        "success": True,
+        "data": {
+            "root_layer": root_layer,
+            "text_layer": text_layer,
+            "outline_layer": outline_layer,
+        },
     }
 
 
