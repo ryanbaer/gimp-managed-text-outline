@@ -1,48 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# This GIMP plugin outlines text using the active brush, and allows the result
-# to be managed and re-outlined via a Managed Layer Group.
+# This GIMP plugin outlines text using the active brush, and allows the result to be managed and re-outlined via a Managed Layer Group.
 #
-# This plugin is based on a similar plugin by CJ Kucera, available at:
-#     https://github.com/apocalyptech/gimp-text-outline
-#
-# CJ's plugin is based on the plugin written by Pete Nu, available at:
-#     http://pete.nu/software/gimp-outline/
-#
-# I created this version because I wanted to be able to re-outline text easily. More specifically, the existing plugin:
-#   - Wasn't quite working as expected if the text layer was inside of a Layer Group.
-#   - Didn't have a good workflow to re-outline the text after you changed it.
-#   - Didn't have the best way to manage the extra layers it created (e.g., a Layer Group).
-#
-# I also just wanted to try my hand at writing a GIMP plugin, even though the GIMP team is no longer interested
-# in maintaining the Python-fu system.
-#
-#
-# INSTRUCTIONS
-# - Make sure the brush settings are the ones you want for outlining the layer
-# - Select a text layer that you want to outline
-# - Run the plugin from Filters > Decore > Text Outline
-# - The plugin will create a new layer group with the original text layer and the outlined layer
-#
-# - If you want to re-outline the text, just run the plugin again on any of the 3 layers (parent group layer, text layer,
-#   or the outline layer).
-#   - The plugin will then find the parent group layer and re-outline the text layer.
-#
-#
-# MOVING LAYERS
-# - When the Move Tool mode is "Pick a Layer or Guide", GIMP can get a bit frustrating.
-# - You aren't able to select the group layer, so you'll end up moving either the text layer or the outline layer.
-# - Focus on moving the text layer to where you want to go. Then, simply rerun the plugin again, and it will recreate
-#   the outline layer in the correct place.
-#
-#
-# DUPLICATING LAYERS
-# - If you duplicate a layer, the child text layers will still be referencing the original group layer's ID.
-# - If you apply the filter to the duplicated child layer (text or outline), you will get an error about a mismatched root ID
-# - If this happens, just select the parent group layer and run the filter, it will work.
-#
-
+# For more info, see the [README](https://github.com/ryanbaer/gimp-managed-text-outline/blob/master/README.md)
 
 from gimpfu import *
 
