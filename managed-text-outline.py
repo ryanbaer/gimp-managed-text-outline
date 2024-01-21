@@ -230,10 +230,17 @@ def update_managed_group(image, root_layer, text_layer, existing_outline_layer=N
 
 def convert_new_text_layer(image, original_text_layer):
     """
-    Adds a new layer beneath the given layer.  Return value is the new
-    layer.  Will raise an ValueError if for some reason we can't find
-    our own layer.  Note that after adding to the Gimp image, this
-    new layer will become the active layer.
+    Converts the given text layer into a managed text layer. Returns
+    a dictionary with the following keys:
+        - root_layer: The root layer (group layer)
+        - text_layer: The original text layer, cloned and converted to a managed text layer.
+        - outline_layer: The outline layer
+
+    Note that this function deletes the original text layer in order to move it underneath
+    the root layer.
+
+    This function is adapted to handle nested layers. It will either search the root of the
+    layers hierarchy (via the image) or the parent of provided original text layer.
     """
 
     # Get the layer position.
@@ -293,19 +300,19 @@ def outline_path(image, layer, path):
 
 def crop_layer(image, layer):
     """
-    Autocrops the given layer to be as small as possible using the existing `pdb` method.
+    Autocrops the given layer to be as small as possible using builtin autocrop functionality.
     """
     pdb.plug_in_autocrop_layer(image, layer)
 
 
 def determine_target_layer_type(layer):
     """
-    Determines the target layer type. This could be:
-    - managed-root (the parent Layer Group)
-    - managed-text (the text layer)
-    - managed-outline (the outline layer)
-    - text (a regular text layer for us to manage)
-    - unknown-type (something else we don't care about)
+    Determines the target layer type. Possible values:
+        - managed-root (the parent Layer Group)
+        - managed-text (the text layer)
+        - managed-outline (the outline layer)
+        - text (a regular text layer for us to manage)
+        - unknown-type (something else we don't care about)
     """
 
     if ManagedLayerUtils.is_managed_root(layer):
@@ -365,8 +372,9 @@ def prepare_target_layer(image, original_layer):
 
 def manage_text_outline(image, original_layer):
     """
-    Main function to do our processing.  image and layer are
-    passed in by default, we require no other arguments.
+    The main entrypoint to the plugin for outlining text and managing the result.
+
+    GIMP will provide us with the current image and the active layer.
     """
 
     gimp.progress_init("Drawing outline around text")
