@@ -116,7 +116,7 @@ class ManagedLayerUtils:
         if ManagedLayerUtils.is_managed_root(managed_layer):
             return {"success": True, "data": managed_layer}
 
-        outcome = get_root_id_ref(managed_layer)
+        outcome = ManagedLayerUtils.get_root_id_ref(managed_layer)
         if not outcome["success"]:
             return outcome
 
@@ -137,18 +137,18 @@ class ManagedLayerUtils:
 
         return {"success": True, "data": parent}
 
+    @staticmethod
+    def get_root_id_ref(root_layer):
+        """
+        Gets the root ID reference for the given root layer. Assumes the layer is
+        already a root layer.
+        """
 
-def get_root_id_ref(root_layer):
-    """
-    Gets the root ID reference for the given root layer. Assumes the layer is
-    already a root layer.
-    """
+        parasite = ParasiteUtils.get_parasite(root_layer, PARASITE_ROOT_ID_REF)
+        if parasite is None:
+            return {"success": False, "error": "Could not find root ID reference"}
 
-    parasite = ParasiteUtils.get_parasite(root_layer, PARASITE_ROOT_ID_REF)
-    if parasite is None:
-        return {"success": False, "error": "Could not find root ID reference"}
-
-    return {"success": True, "data": ParasiteUtils.get_parasite_data(parasite)}
+        return {"success": True, "data": ParasiteUtils.get_parasite_data(parasite)}
 
 
 class ParasiteUtils:
