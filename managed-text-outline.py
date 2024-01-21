@@ -107,12 +107,6 @@ class ManagedLayerUtils:
         return {"success": True, "data": parent}
 
 
-def get_text_layer_content(layer):
-    # TODO: This doesn't seem to work consistently
-    # It seems if the user doesn't make any adjustments from the default markup, it will be None
-    return pdb.gimp_text_layer_get_markup(layer)
-
-
 def get_root_id_ref(managed_layer):
     parasite = ParasiteUtils.get_parasite(managed_layer, PARASITE_ROOT_ID_REF)
     if parasite is None:
