@@ -6,7 +6,7 @@
 ## Description
 
 This [Python-based](https://www.gimp.org/docs/python/pygimp.html) [GIMP](https://www.gimp.org/) plugin outlines a Text Layer using the active Brush, and allows the result
-to be more easily managed managed and re-outlined via a Layer Group.
+to be more easily managed and re-outlined via a Layer Group.
 
 Outlining text in GIMP is a bit of a pain. You have to do several manual steps to get a nice looking outline around your text.
 
