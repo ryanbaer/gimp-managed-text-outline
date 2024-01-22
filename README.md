@@ -8,6 +8,13 @@
 This [Python-based](https://www.gimp.org/docs/python/pygimp.html) [GIMP](https://www.gimp.org/) plugin outlines a Text Layer using the active Brush, and allows the result
 to be more easily managed managed and re-outlined via a Layer Group.
 
+Outlining text in GIMP is a bit of a pain. You have to do several manual steps to get a nice looking outline around you text.
+
+Furthermore, you either have to rasterize the Layer for the outline, which makes the text unmodifiable.
+Or, you have to manage a second outline Text Layer, and redo the whole process if you want to make any adjustments to the text.
+
+This plugin automates all of that via a Filter, and makes it easy to re-outline the Text Layer after you make changes.
+
 ## Installation
 
 Installing Python-based GIMP plugins is pretty simple. This is especially true for plugins like this one where it is just a single file.
