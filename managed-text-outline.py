@@ -100,6 +100,67 @@ class Errors:
 
     ParasiteDataMustBeString = "ParasiteDataMustBeString"
 
+    @staticmethod
+    def get_user_facing_message(error):
+        def please_try_with_new(error):
+            return "{}. Please try again with a new Text Layer.".format(error)
+
+        def repair_duplicate(error):
+            return """{}.
+This can happen when duplicating a Group Layer and trying to rerun the Filter.
+You can repair this by running the Filter on the duplicated Group Layer.""".format(
+                error
+            )
+
+        if error == Errors.UnexpectedTargetLayerType:
+            return please_try_with_new("Received an invalid Layer type")
+        elif error == Errors.ExpectedTextLayer:
+            return please_try_with_new("Expected a Text Layer")
+        elif error == Errors.UnknownLayerType:
+            return please_try_with_new("Received an unknown Layer type")
+        elif error == Errors.ParentlessChild:
+            return please_try_with_new(
+                "The Layer you selected was expected to have a Parent Group Layer, but we couldn't find it"
+            )
+        elif error == Errors.ChildlessRoot:
+            return please_try_with_new(
+                "The Layer you selected was expected to be a Layer Group with at least one Child Layer, but we couldn't find any"
+            )
+        elif error == Errors.FoundRootWithoutText:
+            return please_try_with_new(
+                "The Layer you selected should have had a Text Layer as a Child Layer, but we couldn't find it"
+            )
+        elif error == Errors.LayerWasNotManagedRoot:
+            return please_try_with_new(
+                "The Layer you selected was not a Parent Group Layer"
+            )
+        elif error == Errors.ParentLayerWasNotManagedRoot:
+            return please_try_with_new(
+                "The Parent Layer of the Layer you selected should have been a Parent Group Layer, but it was not"
+            )
+        elif error == Errors.ChildLayerWithoutRootReference:
+            return please_try_with_new(
+                "The Child Layer you selected was missing a reference to its Parent Group Layer"
+            )
+        elif error == Errors.ChildLayerDoesNotMatchRoot:
+            return repair_duplicate(
+                "The Child Layer you selected did not match the Parent Group Layer"
+            )
+        elif error == Errors.TextLayerDoesNotMatchRoot:
+            return repair_duplicate(
+                "The Text Layer you selected did not match the Parent Group Layer"
+            )
+        elif error == Errors.OutlineLayerDoesNotMatchRoot:
+            return repair_duplicate(
+                "The Outline Layer you selected did not match the Parent Group Layer"
+            )
+        elif error == Errors.ParasiteDataMustBeString:
+            return "Parasite data must be a string"
+        else:
+            return """We received an unexpected error.
+If possible, please try running GIMP from the Terminal and copy the output when the error occurs.
+Open an issue on GitHub and paste the output there with a description of what you were doing when the error occurred."""
+
 
 class ParasiteSupport:
     class Fields:
@@ -120,11 +181,13 @@ class ParasiteSupport:
     @staticmethod
     def add_parasite(layer, key, value):
         """
-        Adds a Parasite to the given Layer. If the Parasite already
-        exists, it will be replaced. If the value passed in is not
-        a string, it raises a ValueError.
-
+        Adds a Parasite to the given Layer.
+        Returns a Result of the created Parasite.
         The created Parasite is persistent and undoable.
+
+        If the Parasite already exists, it will be replaced.
+
+        If the value passed in is not a string, the Result contains an Error.
         """
 
         if type(value) is not str:
@@ -137,22 +200,24 @@ class ParasiteSupport:
         return Result.ok(parasite)
 
     @staticmethod
-    def get_parasite(layer, key):
+    def get_parasite(layer, field_name):
         """
-        Gets the Parasite with the given key from the given Layer.
+        Gets the Parasite with the given field_name from the given Layer.
         Returns None if the Parasite does not exist.
+
+        The field names for this plugin's Parasites come from the `ParasiteSupport.Fields` class.
         """
 
-        return layer.parasite_find(key)
+        return layer.parasite_find(field_name)
 
     @staticmethod
     def get_data(parasite):
         """
-        Gets the data from the given Parasite. If the Parasite does
-        not exist, returns None.
+        Gets the normalized data from the given Parasite. If the Parasite does
+        not exist, or there is no data, it returns None.
         """
 
-        if parasite is None:
+        if parasite is None or parasite.data is None:
             return None
 
         return FFIUtils.remove_data_terminator(parasite.data)
@@ -167,10 +232,6 @@ class ParasiteSupport:
 
 
 class LayerSupport:
-    @staticmethod
-    def get_outline_layer_name(text_layer):
-        return "Outline: {}".format(text_layer.name)
-
     @staticmethod
     def is_plain_text_layer(layer):
         """
@@ -194,8 +255,7 @@ class LayerSupport:
     @staticmethod
     def is_managed_root(layer):
         """
-        Determines if the provided Layer is a Managed Root Layer. This is done by checking for the
-        presence of the `ParasiteSupport.Fields.RootField` Parasite.
+        Determines if the provided Layer is a Managed Root Layer.
         """
 
         return LayerSupport.has_field(layer, ParasiteSupport.Fields.Root)
@@ -203,16 +263,14 @@ class LayerSupport:
     @staticmethod
     def is_managed_text(layer):
         """
-        Determines if the provided Layer is a Managed Text Layer. This is done by checking for the
-        presence of the `ParasiteSupport.Fields.TextField` Parasite.
+        Determines if the provided Layer is a Managed Text Layer.
         """
         return LayerSupport.has_field(layer, ParasiteSupport.Fields.Text)
 
     @staticmethod
     def is_managed_outline(layer):
         """
-        Determines if the provided Layer is a Managed Outline Layer. This is done by checking for the
-        presence of the `ParasiteSupport.Fields.OutlineField` Parasite.
+        Determines if the provided Layer is a Managed Outline Layer.
         """
 
         return LayerSupport.has_field(layer, ParasiteSupport.Fields.Outline)
@@ -232,7 +290,7 @@ class LayerSupport:
         return Result.ok(ParasiteSupport.get_data(parasite))
 
     @staticmethod
-    def does_root_match(root_layer, child_layer):
+    def is_child_of_root(root_layer, child_layer):
         """
         Determines if the given Child Layer is a child of the given Root Layer.
         Returns a Result containing a bool indicating this condition.
@@ -250,13 +308,13 @@ class LayerSupport:
         if child_layer_parasite is None:
             return Result.err(Errors.ChildLayerWithoutRootReference)
 
-        group_id = str(root_layer.ID)
-        ref_group_id = ParasiteSupport.get_data(child_layer_parasite)
+        root_id = str(root_layer.ID)
+        child_root_id = ParasiteSupport.get_data(child_layer_parasite)
 
-        return Result.ok(group_id == ref_group_id)
+        return Result.ok(root_id == child_root_id)
 
     @staticmethod
-    def get_root(image, managed_layer):
+    def get_root_from_child(image, managed_layer):
         """
         Returns a Result containing the Root Layer for a Managed Layer.
 
@@ -271,7 +329,7 @@ class LayerSupport:
         if Result.is_err(outcome):
             return outcome
 
-        root_id = Result.get_data(outcome)
+        child_root_id = Result.get_data(outcome)
 
         parent = managed_layer.parent
         if parent is None:
@@ -280,32 +338,113 @@ class LayerSupport:
         if not LayerSupport.is_managed_root(parent):
             return Result.err(Errors.ParentLayerWasNotManagedRoot)
 
-        if str(parent.ID) != root_id:
+        if str(parent.ID) != child_root_id:
             return Result.err(Errors.ChildLayerDoesNotMatchRoot)
 
         return Result.ok(parent)
 
+    @staticmethod
+    def add_root_id_reference(root_layer, child_layer):
+        """
+        Adds a Root ID reference to the given Child Layer.
+        Returns a Result containing the newly created Parasite.
+        """
 
-def text_to_path(image, text_layer):
-    """
-    Accepts the Image and a Text Layer.
-    Returns a Result containing a new Path based on the Text Layer.
-    If Layer is not a Text Layer, returns an error result.
+        return ParasiteSupport.add_parasite(
+            child_layer, ParasiteSupport.Fields.RootReference, str(root_layer.ID)
+        )
 
-    Note: A Managed Text Layer is a subset of a Plain Text Layer, so both types validate
-    as a Plain Text Layer.
-    """
+    @staticmethod
+    def append_outline_layer(
+        image, root_layer, text_layer_name, existing_outline_layer=None
+    ):
+        """
+        Helper function to append the Outline Layer as a Child Layer of the provided Root Layer.
+        Returns a Result containing the newly created Outline Layer.
+        """
 
-    if not LayerSupport.is_plain_text_layer(text_layer):
-        return Result.err(Errors.ExpectedTextLayer)
+        if existing_outline_layer:
+            pdb.gimp_image_remove_layer(image, existing_outline_layer)
 
-    path = pdb.gimp_vectors_new_from_text_layer(image, text_layer)
-    pdb.gimp_image_insert_vectors(image, path, None, 0)
+        # Add a new layer below the selected one
+        outline_title = "Outline: {}".format(text_layer_name)
+        outline_layer = gimp.Layer(
+            image,
+            outline_title,
+            image.width,
+            image.height,
+            RGBA_IMAGE,
+            100,
+            NORMAL_MODE,
+        )
 
-    return Result.ok(path)
+        # Mark the new outline layer as managed and add a reference to the root layer
+        outcome = ParasiteSupport.add_parasite(
+            outline_layer, ParasiteSupport.Fields.Outline, "True"
+        )
+        if Result.is_err(outcome):
+            return outcome
+
+        outcome = LayerSupport.add_root_id_reference(root_layer, outline_layer)
+        if Result.is_err(outcome):
+            return outcome
+
+        return Result.ok(outline_layer)
+
+    @staticmethod
+    def text_to_path(image, text_layer):
+        """
+        Accepts the Image and a Text Layer.
+        Returns a Result containing a new Path based on the Text Layer.
+        If Layer is not a Text Layer, the Result contains an Error.
+
+        Note: A Managed Text Layer is a subset of a Plain Text Layer, so both types validate
+        as a Plain Text Layer.
+        """
+
+        if not LayerSupport.is_plain_text_layer(text_layer):
+            return Result.err(Errors.ExpectedTextLayer)
+
+        path = pdb.gimp_vectors_new_from_text_layer(image, text_layer)
+        pdb.gimp_image_insert_vectors(image, path, None, 0)
+
+        return Result.ok(path)
+
+    @staticmethod
+    def outline_path(image, layer, path):
+        """
+        Outline the Path with the current Brush, and then remove the Path.
+        """
+
+        pdb.gimp_edit_stroke_vectors(layer, path)
+        pdb.gimp_image_remove_vectors(image, path)
+
+    @staticmethod
+    def determine_target_layer_type(layer):
+        """
+        Determines the target Layer type and returns a Result.
+
+        Possible values:
+            - "managed-root": the parent Group Layer
+            - "managed-text": the child Text Layer
+            - "managed-outline": the child Outline Layer
+            - "text": a new plain Text Layer that will be converted to a managed layer
+            - "unknown-type": some other type of Layer we're not interested in
+        """
+
+        if LayerSupport.is_managed_root(layer):
+            return Result.ok("managed-root")
+        elif LayerSupport.is_managed_outline(layer):
+            return Result.ok("managed-outline")
+        elif LayerSupport.is_managed_text(layer):
+            return Result.ok("managed-text")
+        elif LayerSupport.is_plain_text_layer(layer):
+            return Result.ok("text")
+        else:
+            return Result.ok("unknown-type")
 
 
-def handle_existing_group(image, root_layer, text_layer, existing_outline_layer=None):
+def handle_existing_text(image, root_layer, text_layer, existing_outline_layer=None):
     """
     Re-outlines the Text Layer for an existing Managed Group.
 
@@ -320,33 +459,17 @@ def handle_existing_group(image, root_layer, text_layer, existing_outline_layer=
 
     position = root_layer.children.index(text_layer)
 
-    if existing_outline_layer:
-        pdb.gimp_image_remove_layer(image, existing_outline_layer)
-
-    # Add a new layer below the selected one
-    outline_title = LayerSupport.get_outline_layer_name(text_layer)
-    outline_layer = gimp.Layer(
-        image, outline_title, image.width, image.height, RGBA_IMAGE, 100, NORMAL_MODE
-    )
-
-    # Mark the new outline layer as managed and add a reference to the root layer
-    outcome = ParasiteSupport.add_parasite(
-        outline_layer, ParasiteSupport.Fields.Outline, "True"
+    outcome = LayerSupport.append_outline_layer(
+        image, root_layer, text_layer.name, existing_outline_layer
     )
     if Result.is_err(outcome):
         return outcome
 
-    outcome = ParasiteSupport.add_parasite(
-        outline_layer, ParasiteSupport.Fields.RootReference, str(root_layer.ID)
-    )
-    if Result.is_err(outcome):
-        return outcome
+    outline_layer = Result.get_data(outcome)
 
     # This handles the duplicated root group issue. We essentially reparent the text layer
     # to the valid managed root layer it is now underneath.
-    outcome = ParasiteSupport.add_parasite(
-        text_layer, ParasiteSupport.Fields.RootReference, str(root_layer.ID)
-    )
+    outcome = LayerSupport.add_root_id_reference(root_layer, text_layer)
     if Result.is_err(outcome):
         return outcome
 
@@ -379,6 +502,9 @@ def handle_new_text_layer(image, original_text_layer):
     layers hierarchy (via the image) or the parent of provided original text layer.
     """
 
+    # Save the name for use throughout, since we will later delete the original Text Layer.
+    text_layer_name = original_text_layer.name
+
     # Get the layer position.
     if original_text_layer.parent is None:
         is_nested = False
@@ -388,7 +514,7 @@ def handle_new_text_layer(image, original_text_layer):
         position = original_text_layer.parent.children.index(original_text_layer)
 
     root_layer = pdb.gimp_layer_group_new(image)
-    root_layer.name = "Group: {}".format(original_text_layer.name)
+    root_layer.name = "Group: {}".format(text_layer_name)
 
     outcome = ParasiteSupport.add_parasite(
         root_layer, ParasiteSupport.Fields.Root, "True"
@@ -396,6 +522,8 @@ def handle_new_text_layer(image, original_text_layer):
     if Result.is_err(outcome):
         return outcome
 
+    # TODO: we might be able to simplify this to use gimp_image_insert_layer
+    # in both cases, and just determine the parent as None if it's not nested.
     if is_nested:
         pdb.gimp_image_insert_layer(
             image, root_layer, original_text_layer.parent, position
@@ -403,12 +531,13 @@ def handle_new_text_layer(image, original_text_layer):
     else:
         image.add_layer(root_layer, position)
 
-    layer_name = original_text_layer.name
     text_layer = pdb.gimp_layer_copy(original_text_layer, True)
+    text_layer.name = text_layer_name
 
     pdb.gimp_image_insert_layer(image, text_layer, root_layer, 0)
+
+    # Don't use original_text_layer past after this next line
     pdb.gimp_image_remove_layer(image, original_text_layer)
-    text_layer.name = layer_name
 
     outcome = ParasiteSupport.add_parasite(
         text_layer, ParasiteSupport.Fields.Text, "True"
@@ -416,29 +545,17 @@ def handle_new_text_layer(image, original_text_layer):
     if Result.is_err(outcome):
         return outcome
 
-    outcome = ParasiteSupport.add_parasite(
-        text_layer, ParasiteSupport.Fields.RootReference, str(root_layer.ID)
-    )
+    outcome = LayerSupport.add_root_id_reference(root_layer, text_layer)
     if Result.is_err(outcome):
         return outcome
+
+    outcome = LayerSupport.append_outline_layer(image, root_layer, text_layer.name)
+    if Result.is_err(outcome):
+        return outcome
+
+    outline_layer = Result.get_data(outcome)
 
     # Add the Outline Layer below the Text Layer
-    outline_title = LayerSupport.get_outline_layer_name(text_layer)
-    outline_layer = gimp.Layer(
-        image, outline_title, image.width, image.height, RGBA_IMAGE, 100, NORMAL_MODE
-    )
-    outcome = ParasiteSupport.add_parasite(
-        outline_layer, ParasiteSupport.Fields.Outline, "True"
-    )
-    if Result.is_err(outcome):
-        return outcome
-
-    outcome = ParasiteSupport.add_parasite(
-        outline_layer, ParasiteSupport.Fields.RootReference, str(root_layer.ID)
-    )
-    if Result.is_err(outcome):
-        return outcome
-
     pdb.gimp_image_insert_layer(image, outline_layer, root_layer, 1)
 
     return Result.ok(
@@ -448,39 +565,6 @@ def handle_new_text_layer(image, original_text_layer):
             "outline_layer": outline_layer,
         }
     )
-
-
-def outline_path(image, layer, path):
-    """
-    Outline the Path with the current Brush, and then remove the Path.
-    """
-
-    pdb.gimp_edit_stroke_vectors(layer, path)
-    pdb.gimp_image_remove_vectors(image, path)
-
-
-def determine_target_layer_type(layer):
-    """
-    Determines the target Layer type and returns a Result.
-
-    Possible values:
-        - "managed-root": the parent Group Layer
-        - "managed-text": the child Text Layer
-        - "managed-outline": the child Outline Layer
-        - "text": a new plain Text Layer that will be converted to a managed layer
-        - "unknown-type": some other type of Layer we're not interested in
-    """
-
-    if LayerSupport.is_managed_root(layer):
-        return Result.ok("managed-root")
-    elif LayerSupport.is_managed_outline(layer):
-        return Result.ok("managed-outline")
-    elif LayerSupport.is_managed_text(layer):
-        return Result.ok("managed-text")
-    elif LayerSupport.is_plain_text_layer(layer):
-        return Result.ok("text")
-    else:
-        return Result.ok("unknown-type")
 
 
 def prepare_target_layer(image, original_layer):
@@ -501,7 +585,7 @@ def prepare_target_layer(image, original_layer):
     still get the desired outcome.
     """
 
-    outcome = determine_target_layer_type(original_layer)
+    outcome = LayerSupport.determine_target_layer_type(original_layer)
     if Result.is_err(outcome):
         return outcome
 
@@ -521,7 +605,7 @@ def prepare_target_layer(image, original_layer):
         return Result.err(Errors.UnexpectedTargetLayerType)
 
     # At this point we know we have a Managed Layer.
-    outcome = LayerSupport.get_root(image, original_layer)
+    outcome = LayerSupport.get_root_from_child(image, original_layer)
     if Result.is_err(outcome):
         return outcome
 
@@ -538,7 +622,7 @@ def prepare_target_layer(image, original_layer):
     if not text_layer:
         return Result.err(Errors.FoundRootWithoutText)
 
-    outcome = LayerSupport.does_root_match(root_layer, text_layer)
+    outcome = LayerSupport.is_child_of_root(root_layer, text_layer)
     if Result.is_err(outcome):
         return outcome
 
@@ -549,7 +633,7 @@ def prepare_target_layer(image, original_layer):
     if not text_matches_root:
         return Result.err(Errors.TextLayerDoesNotMatchRoot)
 
-    return handle_existing_group(image, root_layer, text_layer, outline_layer)
+    return handle_existing_text(image, root_layer, text_layer, outline_layer)
 
 
 def entrypoint(image, original_layer):
@@ -558,6 +642,8 @@ def entrypoint(image, original_layer):
     as changes are made.
 
     GIMP will provide us with the current Image and the active Layer.
+
+    Returns a Result of a boolean indicating whether or not the Filter ran for the selected Layer.
     """
 
     gimp.progress_init("Drawing outline around text")
@@ -566,10 +652,10 @@ def entrypoint(image, original_layer):
     if Result.is_err(outcome):
         error = Result.get_error(outcome)
         if error != Errors.UnknownLayerType and error != Errors.FoundRootWithoutText:
-            raise ValueError("UnexpectedError: {}".format(error))
+            return outcome
 
         # If we received an expected error, this just becomes a no-op.
-        return
+        return Result.ok(False)
 
     target_layer_data = Result.get_data(outcome)
 
@@ -580,15 +666,15 @@ def entrypoint(image, original_layer):
     gimp.progress_update(25)
 
     # Convert the text layer to a path that we can stroke (outline)
-    path_outcome = text_to_path(image, text_layer)
+    path_outcome = LayerSupport.text_to_path(image, text_layer)
     if Result.is_err(path_outcome):
-        raise ValueError(Result.get_error(path_outcome))
+        return path_outcome
 
     path = Result.get_data(path_outcome)
     gimp.progress_update(50)
 
     # Outline the path of the text layer and remove the path we made
-    outline_path(image, outline_layer, path)
+    LayerSupport.outline_path(image, outline_layer, path)
     gimp.progress_update(75)
 
     # We originally created the Outline Layer as big as the entire Image.
@@ -601,17 +687,23 @@ def entrypoint(image, original_layer):
     pdb.gimp_image_set_active_layer(image, root_layer)
 
     gimp.progress_update(100)
+    return Result.ok(True)
 
 
 def run_plugin(image, layer):
     try:
-        return entrypoint(image, layer)
-    except Exception as e:
+        outcome = entrypoint(image, layer)
+        if Result.is_err(outcome):
+            error = Result.get_error(outcome)
+            gimp.message(Errors.get_user_facing_message(error))
+            return
+    except Exception as error:
         gimp.progress_update(100)
+        gimp.message(str(error))
+
         import traceback
 
-        gimp.message(str(e))
-        print(e)
+        print("\n\n{}\nTRACEBACK:\n".format(error))
         traceback.print_exc()
 
 
