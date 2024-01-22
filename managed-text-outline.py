@@ -566,9 +566,9 @@ def entrypoint(image, original_layer):
     if Result.is_err(outcome):
         error = Result.get_error(outcome)
         if error != Errors.UnknownLayerType and error != Errors.FoundRootWithoutText:
-            raise ValueError("Unknown error: %s" % error)
+            raise ValueError("UnexpectedError: {}".format(error))
 
-        # Any other layers are a no-op.
+        # If we received an expected error, this just becomes a no-op.
         return
 
     target_layer_data = Result.get_data(outcome)
