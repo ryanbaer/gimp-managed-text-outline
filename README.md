@@ -1,6 +1,8 @@
 
 # GIMP Text Outline Plugin
 
+![Plugin Demo](./plugin-demo.gif)
+
 ## Description
 
 This GIMP plugin outlines a Text Layer using the active Brush, and allows the result
