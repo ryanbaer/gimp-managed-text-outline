@@ -474,7 +474,7 @@ def handle_existing_text(image, root_layer, text_layer, existing_outline_layer=N
         return outcome
 
     # Place the outline layer as the second child (index 1) of the root layer
-    pdb.gimp_image_insert_layer(image, outline_layer, root_layer, 1)
+    pdb.gimp_image_insert_layer(image, outline_layer, root_layer, position + 1)
 
     return Result.ok(
         {
