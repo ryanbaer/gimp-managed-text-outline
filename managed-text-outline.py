@@ -232,7 +232,7 @@ class LayerSupport:
         return Result.ok(ParasiteSupport.get_data(parasite))
 
     @staticmethod
-    def does_group_match(root_layer, child_layer):
+    def does_root_match(root_layer, child_layer):
         """
         Determines if the given Child Layer is a child of the given Root Layer.
         Returns a Result containing a bool indicating this condition.
@@ -538,13 +538,16 @@ def prepare_target_layer(image, original_layer):
     if not text_layer:
         return Result.err(Errors.FoundRootWithoutText)
 
-    if not LayerSupport.does_group_match(root_layer, text_layer):
-        return Result.err(Errors.TextLayerDoesNotMatchRoot)
+    outcome = LayerSupport.does_root_match(root_layer, text_layer)
+    if Result.is_err(outcome):
+        return outcome
 
-    if outline_layer:
-        # TODO: do we really need to check this?
-        if not LayerSupport.does_group_match(root_layer, outline_layer):
-            return Result.err(Errors.OutlineLayerDoesNotMatchRoot)
+    # Ensure the Text Layer matches the Root Layer.
+    # We don't need to check the Outline Layer for this condition because
+    # it gets deleted anyway.
+    text_matches_root = Result.get_data(outcome)
+    if not text_matches_root:
+        return Result.err(Errors.TextLayerDoesNotMatchRoot)
 
     return handle_existing_group(image, root_layer, text_layer, outline_layer)
 
@@ -570,6 +573,7 @@ def entrypoint(image, original_layer):
 
     target_layer_data = Result.get_data(outcome)
 
+    root_layer = target_layer_data["root_layer"]
     text_layer = target_layer_data["text_layer"]
     outline_layer = target_layer_data["outline_layer"]
 
@@ -591,6 +595,11 @@ def entrypoint(image, original_layer):
     # This prevented the Stroke from being clipped by the Layer bounds of the Text Layer.
     # Now, we can crop it to its minimal size, close to the size of the Text Layer.
     pdb.plug_in_autocrop_layer(image, outline_layer)
+
+    # Set the active Layer back to the group. Otherwise the Outline Layer will be the last
+    # active Layer, which is not typically what we'd want.
+    pdb.gimp_image_set_active_layer(image, root_layer)
+
     gimp.progress_update(100)
 
 
